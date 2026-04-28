@@ -892,13 +892,13 @@ export default function Game() {
              <div className="flex flex-col gap-2 pointer-events-auto">
                {highScore > 0 && (
                   <div className="flex flex-col items-end bg-slate-900/60 backdrop-blur-md rounded-xl px-3 py-2 border border-white/10 shadow-lg">
-                    <span className="text-xs text-white/80 uppercase tracking-widest font-bold">أفضل رقم</span>
+                    <span className="text-xs text-white/80 uppercase tracking-widest font-bold">أفضل رقم لك</span>
                     <span className="text-xl font-bold text-yellow-300">{highScore}</span>
                   </div>
                )}
                {leaderboard.length > 0 && (
                  <div className="bg-slate-900/60 backdrop-blur-md rounded-xl px-3 py-2 border border-white/10 shadow-lg text-right min-w-[120px] max-w-[160px]">
-                    <span className="text-xs text-white/80 font-bold block mb-2 border-b border-white/20 pb-1">أفضل 5 لاعبين</span>
+                    <span className="text-xs text-white/80 font-bold block mb-2 border-b border-white/20 pb-1">أفضل 5 لاعبين حول العالم</span>
                     <div className="flex flex-col gap-1">
                       {leaderboard.map((entry, i) => (
                         <div key={i} className="flex justify-between items-center text-sm">
