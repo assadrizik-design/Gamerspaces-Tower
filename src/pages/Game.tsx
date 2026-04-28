@@ -120,7 +120,6 @@ export default function Game() {
         
         const q = query(
           collection(db, 'leaderboard'),
-          where('score', '>=', 0),
           orderBy('score', 'desc'),
           limit(5)
         );

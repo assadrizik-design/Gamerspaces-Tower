@@ -45,7 +45,7 @@ service cloud.firestore {
       
       allow get: if isSignedIn();
 
-      allow list: if isSignedIn() && resource.data.score >= 0;
+      allow list: if isSignedIn() && request.query.limit <= 20;
     }
   }
 }
