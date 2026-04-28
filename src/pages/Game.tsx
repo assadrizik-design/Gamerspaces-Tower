@@ -1,4 +1,37 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { db, auth } from '../lib/firebase';
+import { signInAnonymously } from 'firebase/auth';
+import { collection, doc, query, where, orderBy, limit, onSnapshot, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: any;
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      isAnonymous: auth.currentUser?.isAnonymous,
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 // --- Game Constants & Logic ---
 const BLOCK_HEIGHT = 40;
@@ -76,16 +109,38 @@ export default function Game() {
     const savedName = localStorage.getItem('gt_player_name');
     if (savedName) setPlayerName(savedName);
 
-    const savedLeaderboard = localStorage.getItem('gt_leaderboard');
-    if (savedLeaderboard) {
-      try {
-        setLeaderboard(JSON.parse(savedLeaderboard));
-      } catch (e) {}
-    }
-    
     if (localStorage.getItem('gt_save')) {
         setHasSavedGame(true);
     }
+    
+    // Auth and global leaderboard
+    const setupFirebase = async () => {
+      try {
+        await signInAnonymously(auth);
+        
+        const q = query(
+          collection(db, 'leaderboard'),
+          where('score', '>=', 0),
+          orderBy('score', 'desc'),
+          limit(5)
+        );
+        
+        onSnapshot(q, (snapshot) => {
+          const globalLeaderboard: ScoreEntry[] = [];
+          snapshot.forEach((doc) => {
+             const data = doc.data();
+             globalLeaderboard.push({ name: data.name, score: data.score });
+          });
+          setLeaderboard(globalLeaderboard);
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, 'leaderboard');
+        });
+
+      } catch (error) {
+        console.error("Auth failed: ", error);
+      }
+    };
+    setupFirebase();
   }, []);
 
   useEffect(() => {
@@ -306,21 +361,28 @@ export default function Game() {
       const pName = playerNameRef.current;
       const currentScore = scoreRef.current;
       
-      if (pName.trim()) {
-        let updatedLeaderboard = [...leaderboardRef.current];
-        const existingIndex = updatedLeaderboard.findIndex(p => p.name === pName);
+      if (pName.trim() && auth.currentUser) {
+        const uid = auth.currentUser.uid;
         
-        if (existingIndex >= 0) {
-            if (currentScore > updatedLeaderboard[existingIndex].score) {
-                updatedLeaderboard[existingIndex].score = currentScore;
+        let oldScore = 0;
+        getDoc(doc(db, 'leaderboard', uid)).then(docSnap => {
+            if (docSnap.exists()) {
+                oldScore = docSnap.data().score || 0;
             }
-        } else {
-            updatedLeaderboard.push({ name: pName, score: currentScore });
-        }
-        
-        updatedLeaderboard = updatedLeaderboard.sort((a,b) => b.score - a.score).slice(0, 5);
-        setLeaderboard(updatedLeaderboard);
-        localStorage.setItem('gt_leaderboard', JSON.stringify(updatedLeaderboard));
+            
+            if (currentScore > oldScore) {
+                setDoc(doc(db, 'leaderboard', uid), {
+                    name: pName,
+                    score: currentScore,
+                    userId: uid,
+                    updatedAt: serverTimestamp()
+                }).catch(err => {
+                    handleFirestoreError(err, OperationType.WRITE, 'leaderboard');
+                });
+            }
+        }).catch(err => {
+            handleFirestoreError(err, OperationType.GET, 'leaderboard');
+        });
       }
 
       if (currentScore > highScoreRef.current) {
